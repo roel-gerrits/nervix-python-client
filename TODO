@@ -1,0 +1,21 @@
+
+TODO
+
+v1.0
+
+- call verify on verbs somewhere
+
+- add licence (LGPL?)
+
+- encoding of payload
+    run all incoming/outgoing payloads trough a decoder/encoder which prefixes the payload with a content-hint-byte or
+    something.
+
+    also write tests for this
+
+- simulate no-interest or similar when connection is lost! so client will not post things when not
+    connected.
+
+- create_channel('nxtcp://localhost:9999') function that creates a connection and channel object in one line
+
+- add heaps of comments to channel.py

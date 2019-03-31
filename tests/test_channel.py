@@ -1,7 +1,8 @@
 import unittest
 from unittest.mock import Mock
 
-from nervix.channel import Channel, Message, Interest, Call, MessageStatus, InterestStatus, HandlerList
+from nervix.channel import Channel
+from nervix.core import Message, Post, Interest, Call, MessageStatus, InterestStatus, HandlerList
 from nervix import verbs
 
 from tests.util.mockedconnection import MockedConnection
@@ -23,16 +24,16 @@ class Test(unittest.TestCase):
         sub = chan.subscribe('name', 'topic')
 
         conn.assert_upstream_verb(verbs.SubscribeVerb(
-            name='name',
-            topic='topic',
+            name=b'name',
+            topic=b'topic',
             messageref=1,
         ))
 
         sub.cancel()
 
         conn.assert_upstream_verb(verbs.UnsubscribeVerb(
-            name='name',
-            topic='topic',
+            name=b'name',
+            topic=b'topic',
         ))
 
         conn.assert_upstream_verb(None)
@@ -52,16 +53,16 @@ class Test(unittest.TestCase):
         conn.mock_connection_ready(True)
 
         conn.assert_upstream_verb(verbs.SubscribeVerb(
-            name='name',
-            topic='topic',
+            name=b'name',
+            topic=b'topic',
             messageref=1,
         ))
 
         sub.cancel()
 
         conn.assert_upstream_verb(verbs.UnsubscribeVerb(
-            name='name',
-            topic='topic',
+            name=b'name',
+            topic=b'topic',
         ))
 
         conn.assert_upstream_verb(None)
@@ -97,7 +98,7 @@ class Test(unittest.TestCase):
         session = chan.session('name')
 
         conn.assert_upstream_verb(verbs.LoginVerb(
-            name='name',
+            name=b'name',
             enforce=False,
             standby=False,
             persist=False,
@@ -106,7 +107,7 @@ class Test(unittest.TestCase):
         session.cancel()
 
         conn.assert_upstream_verb(verbs.LogoutVerb(
-            name='name',
+            name=b'name',
         ))
 
         conn.assert_upstream_verb(None)
@@ -126,7 +127,7 @@ class Test(unittest.TestCase):
         conn.mock_connection_ready(True)
 
         conn.assert_upstream_verb(verbs.LoginVerb(
-            name='name',
+            name=b'name',
             enforce=False,
             standby=False,
             persist=False,
@@ -135,7 +136,7 @@ class Test(unittest.TestCase):
         session.cancel()
 
         conn.assert_upstream_verb(verbs.LogoutVerb(
-            name='name',
+            name=b'name',
         ))
 
         conn.assert_upstream_verb(None)
@@ -170,11 +171,11 @@ class Test(unittest.TestCase):
         chan.request('name', 'payload').send()
 
         conn.assert_upstream_verb(verbs.RequestVerb(
-            name='name',
+            name=b'name',
             unidirectional=True,
             messageref=None,
             timeout=5.0,
-            payload='payload'
+            payload=b'payload'
         ))
 
     def test_request_2(self):
@@ -191,11 +192,11 @@ class Test(unittest.TestCase):
         req.send()
 
         conn.assert_upstream_verb(verbs.RequestVerb(
-            name='name',
+            name=b'name',
             unidirectional=True,
             messageref=None,
             timeout=5.0,
-            payload='payload'
+            payload=b'payload'
         ))
 
     def test_request_3(self):
@@ -213,11 +214,11 @@ class Test(unittest.TestCase):
         req.send()
 
         conn.assert_upstream_verb(verbs.RequestVerb(
-            name='name',
+            name=b'name',
             unidirectional=False,
             messageref=1,
             timeout=5.0,
-            payload='payload'
+            payload=b'payload'
         ))
 
     def test_request_4(self):
@@ -238,15 +239,89 @@ class Test(unittest.TestCase):
             conn.mock_connection_ready(True)
 
             conn.assert_upstream_verb(verbs.RequestVerb(
-                name='name',
+                name=b'name',
                 unidirectional=True,
                 messageref=None,
                 timeout=5.0,
-                payload='payload'
+                payload=b'payload'
             ))
 
     def test_request_5(self):
-        """ Test if a request is discarded connection becomes ready after the ttl is expired.
+        """ Test if a request is discarded when connection becomes ready after the ttl is expired.
+        """
+
+        conn = MockedConnection()
+        chan = Channel(conn)
+
+        conn.mock_connection_ready(False)
+
+        with patch_time() as time:
+            chan.request('name', 'payload').send(ttl=5.0)
+
+            time.sleep(5.001)
+
+            conn.mock_connection_ready(True)
+
+        conn.assert_upstream_verb(None)
+
+    def test_post_1(self):
+        """ Test if a post verb is pushed when posted and connection was ready.
+        """
+
+        conn = MockedConnection()
+        chan = Channel(conn)
+
+        conn.mock_connection_ready(True)
+
+        post = Post(chan.core, postref=1, payload='payload', ttl=5.0)
+
+        conn.assert_upstream_verb(verbs.PostVerb(
+            postref=1,
+            payload=b'payload',
+        ))
+
+    def test_post_2(self):
+        """ Test if a post verb is pushed when posted before connection was ready.
+        """
+
+        conn = MockedConnection()
+        chan = Channel(conn)
+
+        conn.mock_connection_ready(False)
+
+        post = Post(chan.core, postref=1, payload='payload', ttl=5.0)
+
+        conn.mock_connection_ready(True)
+
+        conn.assert_upstream_verb(verbs.PostVerb(
+            postref=1,
+            payload=b'payload',
+        ))
+
+    def test_post_3(self):
+        """ Test if a post is still pushed when the connection becomes ready just before
+        the ttl is expires.
+        """
+
+        conn = MockedConnection()
+        chan = Channel(conn)
+
+        with patch_time() as time:
+            conn.mock_connection_ready(False)
+
+            post = Post(chan.core, postref=1, payload='payload', ttl=5.0)
+
+            time.sleep(4.999)
+
+            conn.mock_connection_ready(True)
+
+            conn.assert_upstream_verb(verbs.PostVerb(
+                postref=1,
+                payload=b'payload',
+            ))
+
+    def test_post_4(self):
+        """ Test if a post is discarded when connection becomes ready after the ttl is expired.
         """
 
         conn = MockedConnection()
@@ -279,27 +354,27 @@ class Test(unittest.TestCase):
         conn.mock_connection_ready(True)
 
         conn.assert_upstream_verb(verbs.RequestVerb(
-            name='name',
+            name=b'name',
             unidirectional=True,
             messageref=None,
             timeout=5.0,
-            payload='payload0'
+            payload=b'payload0'
         ))
 
         conn.assert_upstream_verb(verbs.RequestVerb(
-            name='name',
+            name=b'name',
             unidirectional=True,
             messageref=None,
             timeout=5.0,
-            payload='payload1'
+            payload=b'payload1'
         ))
 
         conn.assert_upstream_verb(verbs.RequestVerb(
-            name='name',
+            name=b'name',
             unidirectional=True,
             messageref=None,
             timeout=5.0,
-            payload='payload2'
+            payload=b'payload2'
         ))
 
     def test_backlog_different_ttls(self):
@@ -323,19 +398,19 @@ class Test(unittest.TestCase):
             conn.mock_connection_ready(True)
 
         conn.assert_upstream_verb(verbs.RequestVerb(
-            name='name',
+            name=b'name',
             unidirectional=True,
             messageref=None,
             timeout=5.0,
-            payload='payload1'
+            payload=b'payload1'
         ))
 
         conn.assert_upstream_verb(verbs.RequestVerb(
-            name='name',
+            name=b'name',
             unidirectional=True,
             messageref=None,
             timeout=5.0,
-            payload='payload3'
+            payload=b'payload3'
         ))
 
     def test_backlog_no_ttl(self):
@@ -355,19 +430,19 @@ class Test(unittest.TestCase):
         conn.mock_connection_ready(True)
 
         conn.assert_upstream_verb(verbs.RequestVerb(
-            name='name',
+            name=b'name',
             unidirectional=True,
             messageref=None,
             timeout=5.0,
-            payload='payload1'
+            payload=b'payload1'
         ))
 
         conn.assert_upstream_verb(verbs.RequestVerb(
-            name='name',
+            name=b'name',
             unidirectional=True,
             messageref=None,
             timeout=5.0,
-            payload='payload3'
+            payload=b'payload3'
         ))
 
     def test_handlerlist_message_ok(self):
@@ -462,7 +537,7 @@ class Test(unittest.TestCase):
         conn.mock_downstream_verb(verbs.MessageVerb(
             messageref=1,
             status=verbs.MessageVerb.STATUS_OK,
-            payload='response'
+            payload=b'response'
         ))
 
         self.__verify_handler_call(
@@ -490,7 +565,7 @@ class Test(unittest.TestCase):
         conn.mock_downstream_verb(verbs.MessageVerb(
             messageref=1,
             status=verbs.MessageVerb.STATUS_UNREACHABLE,
-            payload='response'
+            payload=b'response'
         ))
 
         self.__verify_handler_call(
@@ -518,7 +593,7 @@ class Test(unittest.TestCase):
         conn.mock_downstream_verb(verbs.MessageVerb(
             messageref=1,
             status=verbs.MessageVerb.STATUS_TIMEOUT,
-            payload='response'
+            payload=b'response'
         ))
 
         self.__verify_handler_call(
@@ -544,9 +619,9 @@ class Test(unittest.TestCase):
 
         conn.mock_downstream_verb(verbs.InterestVerb(
             postref=1,
-            name='name',
+            name=b'name',
             status=verbs.InterestVerb.STATUS_INTEREST,
-            topic='topic'
+            topic=b'topic'
         ))
 
         self.__verify_handler_call(
@@ -572,9 +647,9 @@ class Test(unittest.TestCase):
 
         conn.mock_downstream_verb(verbs.InterestVerb(
             postref=1,
-            name='name',
+            name=b'name',
             status=verbs.InterestVerb.STATUS_NO_INTEREST,
-            topic='topic'
+            topic=b'topic'
         ))
 
         self.__verify_handler_call(
@@ -600,16 +675,16 @@ class Test(unittest.TestCase):
 
         conn.mock_downstream_verb(verbs.CallVerb(
             unidirectional=True,
-            postref=0,
-            name='name',
-            payload='payload',
+            postref=None,
+            name=b'name',
+            payload=b'payload',
         ))
 
         self.__verify_handler_call(
             handler,
             Call,
             unidirectional=True,
-            postref=0,
+            postref=None,
             payload='payload',
         )
 
@@ -630,8 +705,8 @@ class Test(unittest.TestCase):
         conn.mock_downstream_verb(verbs.CallVerb(
             unidirectional=False,
             postref=1,
-            name='name',
-            payload='payload',
+            name=b'name',
+            payload=b'payload',
         ))
 
         self.__verify_handler_call(

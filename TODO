@@ -3,8 +3,6 @@ TODO
 
 v1.0
 
-- call verify on verbs somewhere
-
 - add licence (LGPL?)
 
 - encoding of payload
@@ -19,3 +17,8 @@ v1.0
 - create_channel('nxtcp://localhost:9999') function that creates a connection and channel object in one line
 
 - add heaps of comments to channel.py
+
+- evaluate amount of logging, add more logging
+
+- handle session verbs
+

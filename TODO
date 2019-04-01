@@ -11,14 +11,29 @@ v1.0
 
     also write tests for this
 
-- simulate no-interest or similar when connection is lost! so client will not post things when not
-    connected.
-
 - create_channel('nxtcp://localhost:9999') function that creates a connection and channel object in one line
 
-- add heaps of comments to channel.py
+- add heaps of comments to channel.py and core.py
 
 - evaluate amount of logging, add more logging
 
 - handle session verbs
+
+- implement nxtcp protocol
+    and add tests
+
+- directory with examples?
+
+- write README
+
+- docs
+
+
+
+DONE:
+
+- simulate no-interest or similar when connection is lost! so client will not post things when not
+    connected.
+
+- warn when post is done from Interest object when there was no interest anymore
 

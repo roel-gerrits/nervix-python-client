@@ -27,6 +27,7 @@ class Core:
 
         self.call_handlers = dict()
         self.interest_handlers = dict()
+        self.connection_lost_handlers = set()
 
         self.verb_handlers = {
             verbs.MessageVerb: self.__on_message_verb,
@@ -107,6 +108,18 @@ class Core:
 
         self.interest_handlers[name] = handler
 
+    def add_connection_lost_handler(self, handler):
+        """ Add a handler that will be called when the connection is lost.
+        """
+
+        self.connection_lost_handlers.add(handler)
+
+    def remove_connection_lost_handler(self, handler):
+        """ Remove a handler from the set of connection_lost callbacks.
+        """
+
+        self.connection_lost_handlers.remove(handler)
+
     def __on_connection_ready(self, ready):
         """ Called by the connection to inform us if the connection is ready to send data.
         """
@@ -127,6 +140,10 @@ class Core:
                     continue
 
                 self.connection.send_verb(verb)
+
+        else:
+            for handler in self.connection_lost_handlers:
+                handler()
 
     def __on_incoming_verb(self, verb):
         """ Called from the connection when a new verb is available for processing.
@@ -365,9 +382,12 @@ class Session:
 
         self.core.set_call_handler(self.name, self.__on_call)
         self.core.set_interest_handler(self.name, self.__on_interest)
+        self.core.add_connection_lost_handler(self.__on_connection_lost)
 
         self.call_handlers = HandlerList()
         self.interest_handlers = HandlerList()
+
+        self.current_interest = dict()
 
         self.verb = verbs.LoginVerb(
             name=encode_name(self.name),
@@ -389,9 +409,29 @@ class Session:
         self.call_handlers.call(None, call)
 
     def __on_interest(self, interest_verb):
+
+        # store or remove interest object in internal mapping of current interests
+        topic = interest_verb.topic
+        status = interest_verb.status
+
+        if status == verbs.InterestVerb.STATUS_INTEREST:
+            self.current_interest[topic] = interest_verb
+        elif status == verbs.InterestVerb.STATUS_NO_INTEREST:
+            self.current_interest.pop(topic, None)
+
         interest = Interest(self.core, interest_verb, self)
-        filter = InterestStatus.from_verb(interest_verb)
-        self.interest_handlers.call(filter, interest)
+        self.interest_handlers.call(interest.status, interest)
+
+    def __on_connection_lost(self):
+        """ Called when the connection is lost.
+        """
+
+        # simulate a NO_INTEREST verb for all currently known interests
+        while self.current_interest:
+            topic, verb = self.current_interest.popitem()
+            verb.status = verbs.InterestVerb.STATUS_NO_INTEREST
+
+            self.__on_interest(verb)
 
     def cancel(self):
         res = self.core.cancel(self.verb)
@@ -403,6 +443,7 @@ class Session:
 
         self.core.set_call_handler(self.name, None)
         self.core.set_interest_handler(self.name, None)
+        self.core.remove_connection_lost_handler(self.__on_connection_lost)
 
 
 class Message:
@@ -424,7 +465,7 @@ class Call:
         self.source = source
 
         self.unidirectional = verb.unidirectional
-        self.name = verb.name  # todo: decode from bytes
+        self.name = decode_name(verb.name)
         self.postref = verb.postref
         self.payload = self.core.decode_payload(verb.payload)
 
@@ -432,7 +473,7 @@ class Call:
 
     def post(self, payload, ttl=None):
         if self.unidirectional:
-            logging.warning("Post done on unidirectional call, it will be ignored")
+            logger.warning("Post done on unidirectional call, it will be ignored")
             return
 
         ttl = ttl or self.default_ttl
@@ -449,13 +490,17 @@ class Interest:
         self.source = source
 
         self.status = InterestStatus.from_verb(verb)
-        self.name = verb.name  # todo: decode from bytes
+        self.name = decode_name(verb.name)
         self.postref = verb.postref
         self.topic = self.core.decode_payload(verb.topic)
 
         self.default_ttl = 5.0
 
     def post(self, payload, ttl=None):
+        if self.status != InterestStatus.INTEREST:
+            logger.warning("Attempted post on lost interest, post will be ignored")
+            return
+
         ttl = ttl or self.default_ttl
 
         post = Post(self.core, self.postref, payload, ttl)

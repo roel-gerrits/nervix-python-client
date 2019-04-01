@@ -3,6 +3,7 @@ from unittest.mock import Mock
 
 from nervix.channel import Channel
 from nervix.core import Message, Post, Interest, Call, MessageStatus, InterestStatus, HandlerList
+from nervix import core
 from nervix import verbs
 
 from tests.util.mockedconnection import MockedConnection
@@ -628,6 +629,7 @@ class Test(unittest.TestCase):
             handler,
             Interest,
             status=InterestStatus.INTEREST,
+            name='name',
             topic='topic',
             source=session,
         )
@@ -651,6 +653,45 @@ class Test(unittest.TestCase):
             status=verbs.InterestVerb.STATUS_NO_INTEREST,
             topic=b'topic'
         ))
+
+        self.__verify_handler_call(
+            handler,
+            Interest,
+            status=InterestStatus.NO_INTEREST,
+            name='name',
+            topic='topic',
+            source=session,
+        )
+
+    def test_interest_connection_lost_1(self):
+        """ Test if the interest is lost when the connection is lost.
+        """
+
+        conn = MockedConnection()
+        chan = Channel(conn)
+
+        conn.mock_connection_ready(True)
+
+        session = chan.session('name')
+        handler = Mock()
+        session.set_interest_handler(handler)
+
+        conn.mock_downstream_verb(verbs.InterestVerb(
+            postref=1,
+            name=b'name',
+            status=verbs.InterestVerb.STATUS_INTEREST,
+            topic=b'topic'
+        ))
+
+        self.__verify_handler_call(
+            handler,
+            Interest,
+            status=InterestStatus.INTEREST,
+            topic='topic',
+            source=session,
+        )
+
+        conn.mock_connection_ready(False)
 
         self.__verify_handler_call(
             handler,
@@ -713,9 +754,48 @@ class Test(unittest.TestCase):
             handler,
             Call,
             unidirectional=False,
+            name='name',
             postref=1,
             payload='payload',
         )
+
+    def test_interest_post_warning(self):
+        """ Test if a warning is logged when a post is attempted on a lost interest.
+        """
+
+        conn = MockedConnection()
+        chan = Channel(conn)
+
+        verb = verbs.InterestVerb(
+            postref=1,
+            name=b'name',
+            status=verbs.InterestVerb.STATUS_NO_INTEREST,
+            topic=b'topic',
+        )
+
+        interest = Interest(chan.core, verb, None)
+
+        with self.assertLogs(core.logger, level='WARNING'):
+            interest.post('payload')
+
+    def test_call_post_warning(self):
+        """ Test if a warning is logged when a post is attempted on an unidirectional call.
+        """
+
+        conn = MockedConnection()
+        chan = Channel(conn)
+
+        verb = verbs.CallVerb(
+            unidirectional=True,
+            postref=None,
+            name=b'name',
+            payload=b'payload'
+        )
+
+        call = Call(chan.core, verb, None)
+
+        with self.assertLogs(core.logger, level='WARNING'):
+            call.post('payload')
 
     def __verify_handler_call(self, handler, arg_type, **arg_attrs):
         handler.assert_called_once()
@@ -726,3 +806,5 @@ class Test(unittest.TestCase):
         for field, expected_value in arg_attrs.items():
             actual_value = getattr(arg, field)
             self.assertEqual(expected_value, actual_value)
+
+        handler.reset_mock()

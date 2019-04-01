@@ -9,8 +9,6 @@ v1.0
 
 - evaluate amount of logging, add more logging
 
-- handle session verbs
-
 - implement nxtcp protocol
     and add tests
 

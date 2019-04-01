@@ -797,6 +797,36 @@ class Test(unittest.TestCase):
         with self.assertLogs(core.logger, level='WARNING'):
             call.post('payload')
 
+    def test_session_verb_logging_1(self):
+        conn = MockedConnection()
+        chan = Channel(conn)
+
+        with self.assertLogs(core.logger, level='INFO'):
+            conn.mock_downstream_verb(verbs.SessionVerb(
+                name=b'name',
+                state=verbs.SessionVerb.STATE_STANDBY,
+            ))
+
+    def test_session_verb_logging_2(self):
+        conn = MockedConnection()
+        chan = Channel(conn)
+
+        with self.assertLogs(core.logger, level='INFO'):
+            conn.mock_downstream_verb(verbs.SessionVerb(
+                name=b'name',
+                state=verbs.SessionVerb.STATE_ACTIVE,
+            ))
+
+    def test_session_verb_logging_3(self):
+        conn = MockedConnection()
+        chan = Channel(conn)
+
+        with self.assertLogs(core.logger, level='INFO'):
+            conn.mock_downstream_verb(verbs.SessionVerb(
+                name=b'name',
+                state=verbs.SessionVerb.STATE_ENDED,
+            ))
+
     def __verify_handler_call(self, handler, arg_type, **arg_attrs):
         handler.assert_called_once()
         arg = handler.call_args[0][0]

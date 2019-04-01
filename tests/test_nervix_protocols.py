@@ -1,6 +1,7 @@
 import unittest
 
 from nervix import create_connection
+from nervix.mainloop import Mainloop
 from nervix.protocols.base import host_port_parser
 from nervix.protocols.nxtcp import NxtcpConnection
 
@@ -24,5 +25,6 @@ class Test(unittest.TestCase):
             host_port_parser(":")
 
     def test_create_connection_nxtcp_1(self):
-        obj = create_connection('nxtcp://localhost:1234')
-        self.assertIsInstance(obj, NxtcpConnection)
+        loop = Mainloop()
+        conn = create_connection(loop, 'nxtcp://localhost:1234')
+        self.assertIsInstance(conn, NxtcpConnection)

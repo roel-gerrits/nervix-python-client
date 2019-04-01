@@ -3,7 +3,7 @@ from nervix.protocols.base import BaseConnection
 
 class NxtcpConnection(BaseConnection):
 
-    def __init__(self, address):
+    def __init__(self, mainloop, address):
         self.address = address
 
     def set_ready_handler(self, handler):

@@ -1,14 +1,16 @@
+from nervix.mainloop import Mainloop
 from nervix.protocols import PROTOCOL_MAP
 from nervix.channel import Channel
 
 
 def create_channel(uri):
-    connection = create_connection(uri)
+    mainloop = Mainloop()
+    connection = create_connection(mainloop, uri)
     channel = Channel(connection)
-    return channel
+    return mainloop, channel
 
 
-def create_connection(uri):
+def create_connection(mainloop, uri):
     """
     """
 
@@ -24,6 +26,6 @@ def create_connection(uri):
 
     address = address_parser(address_str)
 
-    connection = protocol_cls(address)
+    connection = protocol_cls(mainloop, address)
 
     return connection

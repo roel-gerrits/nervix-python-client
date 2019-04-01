@@ -4,14 +4,13 @@ from collections import deque
 from enum import Flag, auto
 
 from nervix import verbs
-from nervix.serializers.string import StringSerializer
 
 logger = logging.getLogger(__name__)
 
 
 class Core:
 
-    def __init__(self, connection, payload_serializer=StringSerializer()):
+    def __init__(self, connection, serializer):
         self.connection = connection
 
         self.connection.set_ready_handler(self.__on_connection_ready)
@@ -36,13 +35,13 @@ class Core:
             verbs.SessionVerb: self.__on_session_verb,
         }
 
-        self.payload_serializer = payload_serializer
+        self.serializer = serializer
 
     def encode_payload(self, payload):
-        return self.payload_serializer.encode(payload)
+        return self.serializer.encode(payload)
 
     def decode_payload(self, payload_raw):
-        return self.payload_serializer.decode(payload_raw)
+        return self.serializer.decode(payload_raw)
 
     def put_upstream(self, verb, ttl=None, auto_resend=False):
         """ Called by the channel when a new verb should be send upstream.
@@ -94,7 +93,7 @@ class Core:
         """ Discard the given messageref.
         """
 
-        # todo
+        self.message_handlers.pop(messageref, None)
 
     def set_call_handler(self, name, handler):
         """ Set a handler for calls to the given name.
@@ -207,7 +206,8 @@ class Core:
         """ Called on incoming session verbs.
         """
 
-        # todo handle session verbs bb
+        state_str = ['?', 'active', 'standby', 'ended'][verb.state]
+        logger.info("Session %s is now %s", verb.name, state_str)
 
 
 class InterestStatus(Flag):

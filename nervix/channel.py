@@ -1,10 +1,11 @@
 from nervix.core import Core, Subscribe, Session, RequestStub
+from nervix.serializers.string import StringSerializer
 
 
 class Channel:
 
-    def __init__(self, connection):
-        self.core = Core(connection)
+    def __init__(self, connection, serializer=StringSerializer()):
+        self.core = Core(connection, serializer)
 
     def subscribe(self, name, topic):
         """ Subscribe to a topic on a named session.

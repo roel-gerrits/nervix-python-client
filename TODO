@@ -5,8 +5,6 @@ v1.0
 
 - add licence (LGPL?)
 
-- create_channel('nxtcp://localhost:9999') function that creates a connection and channel object in one line
-
 - add heaps of comments to channel.py and core.py
 
 - evaluate amount of logging, add more logging
@@ -26,8 +24,4 @@ v1.0
 
 DONE:
 
-- encoding of payload
-    run all incoming/outgoing payloads trough a decoder/encoder which prefixes the payload with a content-hint-byte or
-    something.
-
-    also write tests for this
+- create_channel('nxtcp://localhost:9999') function that creates a connection and channel object in one line

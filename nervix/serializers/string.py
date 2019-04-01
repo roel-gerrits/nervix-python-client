@@ -14,4 +14,4 @@ class StringSerializer(BaseSerializer):
         return obj.encode()
 
     def decode(self, bts):
-        return bts.decode(errors='replace')
+        return bts.decode(errors='backslashreplace')

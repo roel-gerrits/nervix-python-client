@@ -32,4 +32,4 @@ class Test(unittest.TestCase):
     def test_decode_invalid_char_1(self):
         s = StringSerializer()
         res = s.decode(b"test string\xfe")
-        self.assertEqual(res, "test string�")
+        self.assertEqual(res, "test string\\xfe")

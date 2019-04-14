@@ -82,7 +82,20 @@ class OutgoingTcpSynAck(TcpEvent):
 
 
 class OutgoingTcpData(TcpEvent):
-    pass
+
+    def check_chunk(self, actual_data):
+        n = len(actual_data)
+        planned_data = self.data[:n]
+
+        if planned_data != actual_data:
+            raise VerifyError(f"Attempt to write '{actual_data}' but should be '{planned_data}'")
+
+        self.data = self.data[n:]
+
+        if len(self.data) == 0:
+            self.done()
+
+        return n
 
 
 class OutgoingTcpFin(TcpEvent):

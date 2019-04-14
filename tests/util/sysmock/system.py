@@ -49,7 +49,7 @@ class System:
         """ Return the current simulated unix timestamp.
         """
 
-        return 1554271920.0 + self.monotonic_time
+        return 649692000.0 + self.monotonic_time
 
     def socket(self, family, kind):
         """ Create a socket, and return the new fileno.
@@ -114,25 +114,6 @@ class System:
             )
         ).done()
 
-        ##################
-        # # first get the SYN event from the queue so that we learn the peer address
-        # syn_event = self.eventqueue.peek(events.DoTcpSyn)
-        # peer_addr = syn_event.src
-        #
-        # # now verify that same event, so we know for sure that the dst address matches the socket
-        # self.eventqueue.verify(
-        #     events.DoTcpSyn,
-        #     src=peer_addr,
-        #     dst=socket.laddr,
-        # )
-        #
-        # # and then verify the SYN_ACK event
-        # self.eventqueue.verify(
-        #     events.ExpectTcpSynAck,
-        #     src=socket.laddr,
-        #     dst=peer_addr,
-        # )
-
         return conn_fileno, syn_event.src
 
     def getpeername(self, fileno):
@@ -150,13 +131,24 @@ class System:
         return socket.laddr
 
     @log_call
-    def send(self):
+    def send(self, fileno, data):
         """ Send data on the socket.
         """
 
-        # todo: verify tcp_output
+        socket = self.sockets[fileno]
 
-    # @log_call
+        output_event = self.eventqueue.expect(
+            events.OutgoingTcpData(
+                src=socket.laddr,
+                dst=socket.raddr
+            )
+        )
+
+        n = output_event.check_chunk(data)
+
+        return n
+
+    @log_call
     def recv(self, fileno, limit):
         """ Read data from the socket.
         """
@@ -276,8 +268,10 @@ class System:
         # TODO: VERIFY IF WE SHOULD ADHERE TO SOME SPECIFIC ORDER!!!
 
         read_events = self.eventqueue.scan({
-            events.IncomingTcpSyn, events.IncomingTcpSynAck,
-            events.IncomingTcpData, events.IncomingTcpFin,
+            events.IncomingTcpSyn,
+            events.IncomingTcpSynAck,
+            events.IncomingTcpData,
+            events.IncomingTcpFin,
         })
 
         event_list = defaultdict(set)
@@ -321,14 +315,33 @@ class System:
                 else:
                     raise NotImplementedError(f"event {event_type.__name__} is not handled")
 
-        # always allow writing to sockets
-        # for fd, interest in interest_table.items():
-        #
-        #     if 'w' in interest:
-        #         event_list[fd].add('w')
+        # all connected sockets are always allowed to write
+        for fd, interest in interest_table.items():
 
+            socket = self.sockets.get(fd, None)
+
+            if not socket:
+                continue
+
+            if not socket.connected:
+                continue
+
+            if 'w' in interest:
+                event_list[fd].add('w')
+
+        # if there were no events we should think about sleeping for a bit
         if not event_list:
-            if timeout is not None:
+            if timeout is None:
+                # no timeout is specified but if there is a Sleep event pending we will just simulate
+                # a sleep for the duration of that Sleep event
+
+                sleep_event = self.eventqueue.fetch(events.Sleep())
+                if sleep_event:
+                    self.monotonic_time += sleep_event.duration
+                    sleep_event.done()
+
+            else:
+                # sleep for the given timeout
                 self.sleep(timeout)
 
         return event_list.items()

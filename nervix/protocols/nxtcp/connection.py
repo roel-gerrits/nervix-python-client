@@ -55,6 +55,7 @@ class NxtcpConnection(BaseConnection):
 
         self.packet_handlers = {
             decoder.WelcomePacket: self.__on_welcome_packet,
+            decoder.PingPacket: self.__on_ping_packet,
         }
 
         # flag that indicates weather or not the connection is ready
@@ -97,12 +98,15 @@ class NxtcpConnection(BaseConnection):
                 """ The timeout timer has expired, this means that the connection was not set up
                 in time and we will treat this as a failure. 
                 """
+                logger.info("Connection attempt timed out")
+
                 self.do_failed()
 
             elif self.connect_failed:
                 """ The connection process has failed because the OS told us so. Regardless the reason
                 we will treat this as a failure. 
                 """
+                logger.info("Connectection attempt failed")
                 self.do_failed()
 
             elif self.connect_success:
@@ -118,11 +122,14 @@ class NxtcpConnection(BaseConnection):
             if self.welcome_received:
                 """ The welcome message has been received, everything is ready now for the connection
                 to be used."""
+
+                logger.info("Welcome message received")
                 self.do_ready()
 
             elif self.welcome_timer.has_expired():
                 """ We didn't receive the welcome message in time. Handle this failure.
                 """
+                logger.info("No welcome message received")
                 self.do_failed()
 
             elif self.connect_failed:
@@ -275,11 +282,13 @@ class NxtcpConnection(BaseConnection):
             self.evaluate_state()
 
     def __on_write(self):
-        pass
+
+        n = self.encoder.write_to_socket(self.socket)
+
+        if n == 0:
+            self.proxy.stop_writing()
 
     def __on_welcome_packet(self, packet):
-
-        logger.info("Welcome message received")
 
         if packet.protocol_version != 1:
             logger.error("Unsupported protocol version %s", packet.protocol_version)
@@ -287,6 +296,18 @@ class NxtcpConnection(BaseConnection):
         self.welcome_received = True
 
         self.evaluate_state()
+
+    def __on_ping_packet(self, _packet):
+        """ Called when a ping packet is received
+        """
+
+        logger.debug("Ping packet received, sending pong back to server")
+
+        self.encoder.encode(
+            encoder.PongPacket()
+        )
+
+        self.proxy.start_writing()
 
     def __update_ready(self, state):
         prev = self.ready

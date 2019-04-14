@@ -9,7 +9,7 @@ from tests.util.sysmock import Sysmock, TcpAddress, patch
 import tests.nxtcp_packet_definition as packets
 
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     # stream=sys.stdout,
     format="%(asctime)s %(levelname)s %(message)s"
 )
@@ -259,3 +259,25 @@ class Test(unittest.TestCase):
 
             ready_handler.assert_called_once_with(True)
 
+    def test_keepalive_1(self):
+        """ Test if the connection will respond with a pong when the server sends a ping.
+        """
+
+        mock = Sysmock()
+        mock.system.add_unused_local_address(CLIENT)
+
+        with patch(mock):
+            loop = Mainloop()
+
+            mock.expect_tcp_syn(CLIENT, SERVER)
+            mock.do_tcp_syn_ack(SERVER, CLIENT)
+            mock.do_tcp_input(SERVER, CLIENT, packets.welcome())
+
+            conn = NxtcpConnection(loop, SERVER.address)
+
+            mock.expect_sleep(5.0)
+            mock.do_tcp_input(SERVER, CLIENT, packets.ping())
+
+            mock.expect_tcp_output(CLIENT, SERVER, packets.pong())
+
+            mock.run_events(loop.run_once)

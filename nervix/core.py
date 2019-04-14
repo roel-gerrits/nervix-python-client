@@ -11,10 +11,6 @@ logger = logging.getLogger(__name__)
 class Core:
 
     def __init__(self, connection, serializer):
-        self.connection = connection
-
-        self.connection.set_ready_handler(self.__on_connection_ready)
-        self.connection.set_downstream_handler(self.__on_incoming_verb)
 
         self.connection_ready = False
 
@@ -34,6 +30,10 @@ class Core:
             verbs.InterestVerb: self.__on_interest_verb,
             verbs.SessionVerb: self.__on_session_verb,
         }
+
+        self.connection = connection
+        self.connection.set_ready_handler(self.__on_connection_ready)
+        self.connection.set_downstream_handler(self.__on_incoming_verb)
 
         self.serializer = serializer
 
@@ -126,6 +126,8 @@ class Core:
         self.connection_ready = ready
 
         if ready:
+            logger.info("Channel is ready")
+
             now = time.monotonic()
 
             for verb in reversed(self.upstream_auto_resend):
@@ -141,6 +143,8 @@ class Core:
                 self.connection.send_verb(verb)
 
         else:
+            logger.info("Channel is NOT ready")
+
             for handler in self.connection_lost_handlers:
                 handler()
 
@@ -207,7 +211,7 @@ class Core:
         """
 
         state_str = ['?', 'active', 'standby', 'ended'][verb.state]
-        logger.info("Session %s is now %s", verb.name, state_str)
+        logger.info("Session '%s' is now %s", decode_name(verb.name), state_str)
 
 
 class InterestStatus(Flag):
@@ -454,7 +458,15 @@ class Message:
         self.source = source
 
         self.status = MessageStatus.from_verb(verb)
-        self.payload = self.core.decode_payload(verb.payload)
+
+        if self.status == MessageStatus.OK:
+            self.payload = self.core.decode_payload(verb.payload)
+
+        else:
+            self.payload = None
+
+    def __repr__(self):
+        return f"Message({self.status.name}, {repr(self.payload)})"
 
 
 class Call:
@@ -480,6 +492,9 @@ class Call:
 
         post = Post(self.core, self.postref, payload, ttl)
         return post
+
+    def __repr__(self):
+        return f"Call({self.name}, {repr(self.payload)})"
 
 
 class Interest:

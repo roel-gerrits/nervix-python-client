@@ -4,6 +4,7 @@ import logging
 
 from enum import Enum, auto
 
+from nervix import verbs
 from nervix.protocols.base import BaseConnection
 from . import decoder
 from . import encoder
@@ -36,7 +37,9 @@ class NxtcpConnection(BaseConnection):
         self.welcome_timer = mainloop.timer()
         self.welcome_timer.set_handler(self.evaluate_state)
 
-        self.cooldown_timeout = 5.0
+        # self.cooldown_timeout = 5.0
+        self.cooldown_timeouts = [5.0, 5.0, 5.0, 10.0, 10.0, 20.0, 30.0, 60.0]
+        self.cooldown_timeout_i = 0
         self.cooldown_timer = mainloop.timer()
         self.cooldown_timer.set_handler(self.evaluate_state)
 
@@ -46,6 +49,7 @@ class NxtcpConnection(BaseConnection):
         self.connect_failed = False
 
         self.welcome_received = False
+        self.byebye_received = False
 
         self.socket = None
         self.proxy = None
@@ -56,6 +60,20 @@ class NxtcpConnection(BaseConnection):
         self.packet_handlers = {
             decoder.WelcomePacket: self.__on_welcome_packet,
             decoder.PingPacket: self.__on_ping_packet,
+            decoder.ByeByePacket: self.__on_byebye_packet,
+            decoder.SessionPacket: self.__on_session_packet,
+            decoder.CallPacket: self.__on_call_packet,
+            decoder.MessagePacket: self.__on_message_packet,
+            decoder.InterestPacket: self.__on_interest_packet,
+        }
+
+        self.verb_handlers = {
+            verbs.LoginVerb: self.__on_login_verb,
+            verbs.LogoutVerb: self.__on_logout_verb,
+            verbs.RequestVerb: self.__on_request_verb,
+            verbs.PostVerb: self.__on_post_verb,
+            verbs.SubscribeVerb: self.__on_subscribe_verb,
+            verbs.UnsubscribeVerb: self.__on_unsubscribe_verb,
         }
 
         # flag that indicates weather or not the connection is ready
@@ -75,7 +93,18 @@ class NxtcpConnection(BaseConnection):
         self.downstream_handler = handler
 
     def send_verb(self, verb):
-        pass
+        """ Called from Core when a verb should be send upstream.
+        """
+
+        handler = self.verb_handlers.get(type(verb), None)
+
+        if not handler:
+            raise NotImplementedError(f"No handler implemented for {type(verb).__name__}")
+
+        if not self.encoder:
+            raise RuntimeError("Connection not ready")
+
+        handler(verb)
 
     def evaluate_state(self):
 
@@ -106,7 +135,7 @@ class NxtcpConnection(BaseConnection):
                 """ The connection process has failed because the OS told us so. Regardless the reason
                 we will treat this as a failure. 
                 """
-                logger.info("Connectection attempt failed")
+                logger.info("Connection attempt failed")
                 self.do_failed()
 
             elif self.connect_success:
@@ -135,6 +164,13 @@ class NxtcpConnection(BaseConnection):
             elif self.connect_failed:
                 """ Connection was made but has now failed.
                 """
+                logger.info("Connection lost")
+                self.do_failed()
+
+            elif self.byebye_received:
+                """ Server send byebye instead of welcome.
+                """
+                logger.info("Server says byebye instead of welcome, closing connection")
                 self.do_failed()
 
         elif self.state == State.READY:
@@ -144,6 +180,13 @@ class NxtcpConnection(BaseConnection):
             if self.connect_failed:
                 """ Connection was ready but has now failed.
                 """
+                logger.info("Connection lost")
+                self.do_failed()
+
+            elif self.byebye_received:
+                """ Server send byebye instead of welcome.
+                """
+                logger.info("Server says byebye, closing connection")
                 self.do_failed()
 
         elif self.state == State.FAILED:
@@ -167,7 +210,6 @@ class NxtcpConnection(BaseConnection):
         # register on mainloop
         self.proxy = self.mainloop.register(self.socket)
         self.proxy.set_write_handler(self.__on_connect)
-        # self.proxy.set_read_handler(self.__on_connect)
         self.proxy.set_interest(write=True)
 
         # reset error and success flags
@@ -196,6 +238,7 @@ class NxtcpConnection(BaseConnection):
         self.welcome_timer.set(self.welcome_timeout)
 
         self.welcome_received = False
+        self.byebye_received = False
 
         logger.info("Connection successful, waiting for welcome message")
         self.state = State.WAIT_WELCOME
@@ -213,13 +256,21 @@ class NxtcpConnection(BaseConnection):
         """
         """
 
+        self.decoder = None
+        self.encoder = None
+
+        self.proxy.unregister()
         self.socket.close()
 
         # update ready flag
         self.__update_ready(False)
 
-        logger.info("Cooling down for %ss", self.cooldown_timeout)
-        self.cooldown_timer.set(self.cooldown_timeout)
+        timeout = self.cooldown_timeouts[self.cooldown_timeout_i]
+        if self.cooldown_timeout_i < len(self.cooldown_timeouts) - 1:
+            self.cooldown_timeout_i += 1
+
+        logger.info("Cooling down for %ss", timeout)
+        self.cooldown_timer.set(timeout)
 
         self.state = State.FAILED
 
@@ -238,7 +289,7 @@ class NxtcpConnection(BaseConnection):
         handler = self.packet_handlers.get(type(packet), None)
 
         if not handler:
-            raise NotImplementedError("Handler not implemented")
+            raise NotImplementedError(f"Handler not implemented for {type(packet).__name__}")
 
         handler(packet)
 
@@ -251,6 +302,8 @@ class NxtcpConnection(BaseConnection):
         if res == 0:
             # connect was successful
             self.connect_success = True
+
+            self.cooldown_timeout_i = 0
 
             self.encoder = encoder.Encoder()
             self.decoder = decoder.Decoder()
@@ -269,7 +322,7 @@ class NxtcpConnection(BaseConnection):
 
         n = self.decoder.read_from_socket(self.socket)
 
-        while True:
+        while self.decoder:
             packet = self.decoder.decode()
 
             if not packet:
@@ -309,16 +362,130 @@ class NxtcpConnection(BaseConnection):
 
         self.proxy.start_writing()
 
+    def __on_byebye_packet(self, _packet):
+        """ Called when a byebye packet is received.
+        """
+
+        self.byebye_received = True
+        self.evaluate_state()
+
+    def __on_session_packet(self, packet):
+
+        verb = verbs.SessionVerb(
+            name=packet.name,
+            state=[verbs.SessionVerb.STATE_ENDED,
+                   verbs.SessionVerb.STATE_STANDBY,
+                   verbs.SessionVerb.STATE_ACTIVE]
+            [packet.state]
+        )
+
+        if self.downstream_handler:
+            self.downstream_handler(verb)
+
+    def __on_call_packet(self, packet):
+
+        verb = verbs.CallVerb(
+            unidirectional=packet.unidirectional,
+            postref=packet.postref if not packet.unidirectional else None,
+            name=packet.name,
+            payload=packet.payload,
+        )
+
+        if self.downstream_handler:
+            self.downstream_handler(verb)
+
+    def __on_message_packet(self, packet):
+
+        verb = verbs.MessageVerb(
+            messageref=packet.messageref,
+            status=[verbs.MessageVerb.STATUS_OK,
+                    verbs.MessageVerb.STATUS_TIMEOUT,
+                    verbs.MessageVerb.STATUS_UNREACHABLE]
+            [packet.status],
+            payload=packet.payload,
+        )
+
+        if self.downstream_handler:
+            self.downstream_handler(verb)
+
+    def __on_interest_packet(self, packet):
+
+        verb = verbs.InterestVerb(
+            postref=packet.postref,
+            name=packet.name,
+            status=[verbs.InterestVerb.STATUS_NO_INTEREST,
+                    verbs.InterestVerb.STATUS_INTEREST]
+            [packet.status],
+            topic=packet.topic,
+        )
+
+        if self.downstream_handler:
+            self.downstream_handler(verb)
+
+    def __on_login_verb(self, verb):
+
+        self.encoder.encode(encoder.LoginPacket(
+            name=verb.name,
+            enforce=verb.enforce,
+            standby=verb.standby,
+            persist=verb.persist,
+        ))
+
+        self.proxy.start_writing()
+
+    def __on_logout_verb(self, verb):
+
+        self.encoder.encode(encoder.LogoutPacket(
+            name=verb.name,
+        ))
+
+        self.proxy.start_writing()
+
+    def __on_request_verb(self, verb):
+
+        self.encoder.encode(encoder.RequestPacket(
+            name=verb.name,
+            unidirectional=verb.unidirectional,
+            messageref=verb.messageref,
+            timeout=verb.timeout,
+            payload=verb.payload,
+        ))
+
+        self.proxy.start_writing()
+
+    def __on_post_verb(self, verb):
+
+        self.encoder.encode(encoder.PostPacket(
+            postref=verb.postref,
+            payload=verb.payload,
+        ))
+
+        self.proxy.start_writing()
+
+    def __on_subscribe_verb(self, verb):
+
+        self.encoder.encode(encoder.SubscribePacket(
+            messageref=verb.messageref,
+            name=verb.name,
+            topic=verb.topic
+        ))
+
+        self.proxy.start_writing()
+
+    def __on_unsubscribe_verb(self, verb):
+
+        self.encoder.encode(encoder.UnsubscribePacket(
+            name=verb.name,
+            topic=verb.topic
+        ))
+
+        self.proxy.start_writing()
+
     def __update_ready(self, state):
         prev = self.ready
         self.ready = state
 
         if prev != state:
-
-            if state:
-                logger.info("Connection is ready")
-            else:
-                logger.info("Connection is NOT ready")
 
             if self.ready_handler:
                 self.ready_handler(self.ready)

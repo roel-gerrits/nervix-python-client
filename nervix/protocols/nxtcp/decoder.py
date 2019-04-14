@@ -17,8 +17,6 @@ class Decoder(BaseDecoder):
             PACKET_PING: PingPacket,
             PACKET_WELCOME: WelcomePacket,
             PACKET_BYEBYE: ByeByePacket,
-            PACKET_SYNC_ACK: SyncAckPacket,
-            PACKET_ALIGN: AlignPacket,
         }
 
     def decode(self):
@@ -229,23 +227,3 @@ class ByeByePacket(BasePacket):
 
     def __init__(self, frame):
         BasePacket.__init__(self, frame)
-
-
-class SyncAckPacket(BasePacket):
-    """
-    -
-    """
-
-    def __init(self, frame):
-        BasePacket.__init__(self, frame)
-
-
-class AlignPacket(BasePacket):
-    """
-    uint64: timestamp
-    """
-
-    def __init__(self, frame):
-        BasePacket.__init__(self, frame)
-
-        self.timestamp = self.get_uint64(self.nextbyte) / 1000.0

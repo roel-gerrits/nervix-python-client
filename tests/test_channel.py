@@ -573,7 +573,7 @@ class Test(unittest.TestCase):
             handler,
             Message,
             status=MessageStatus.UNREACHABLE,
-            payload='response',
+            payload=None,
             source=reqi,
         )
 
@@ -601,7 +601,7 @@ class Test(unittest.TestCase):
             handler,
             Message,
             status=MessageStatus.TIMEOUT,
-            payload='response',
+            payload=None,
             source=reqi,
         )
 

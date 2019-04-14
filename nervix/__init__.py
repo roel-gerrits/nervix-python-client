@@ -4,13 +4,13 @@ from nervix.channel import Channel
 
 
 def create_channel(uri):
-    mainloop = Mainloop()
-    connection = create_connection(mainloop, uri)
-    channel = Channel(connection)
-    return mainloop, channel
+    loop = Mainloop()
+    connection = create_connection(loop, uri)
+    chan = Channel(connection)
+    return loop, chan
 
 
-def create_connection(mainloop, uri):
+def create_connection(loop, uri):
     """
     """
 
@@ -20,12 +20,12 @@ def create_connection(mainloop, uri):
     if protocol_name not in PROTOCOL_MAP:
         raise ValueError("Unknown protocol %s" % protocol_name)
 
-    address_str = uri[proto_pos + 2:]
+    address_str = uri[proto_pos + 3:]
 
     protocol_cls, address_parser = PROTOCOL_MAP[protocol_name]
 
     address = address_parser(address_str)
 
-    connection = protocol_cls(mainloop, address)
+    connection = protocol_cls(loop, address)
 
     return connection

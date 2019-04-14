@@ -21,6 +21,7 @@ class Patcher:
             mock_patch('socket.socket', side_effect=self.__get_socket),
             mock_patch('selectors.DefaultSelector', side_effect=self.__get_selector),
             mock_patch('time.monotonic', side_effect=self.systemcalls.monotonic),
+            mock_patch('time.time', side_effect=self.systemcalls.time),
             # mock_patch('time.sleep', side_effect=self.systemcalls.sleep),
         ]
 

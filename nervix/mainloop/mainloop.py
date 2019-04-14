@@ -1,11 +1,7 @@
 import time
 import heapq
 
-try:
-    import selectors
-except ImportError:
-    # allows us to use pypy3
-    import compat.selectors as selectors
+import selectors
 
 import logging
 
@@ -396,6 +392,8 @@ class Timer:
         self.handler_args = None
         self.handler_kwargs = None
 
+        self.expired = False
+
     def set_handler(self, handler=None, *args, **kwargs):
         """
         Set the function that will be called when the timer expires.
@@ -417,6 +415,8 @@ class Timer:
         self.mainloop._update_timer_handler(self.timer_id, self.__handler)
         self.mainloop._update_timer_timeout(self.timer_id, timeout)
 
+        self.expired = False
+
     def cancel(self):
         """
         Cancel a set timer.
@@ -426,10 +426,15 @@ class Timer:
             self.mainloop._update_timer_handler(self.timer_id, None)
             self.timer_id = None
 
+    def has_expired(self):
+        return self.expired
+
     def __handler(self):
         """
         Called by the mainloop when the timer expires.
         """
+
+        self.expired = True
 
         if self.handler:
             self.handler(*self.handler_args, **self.handler_kwargs)

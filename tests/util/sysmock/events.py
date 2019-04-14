@@ -1,166 +1,188 @@
 from collections import deque
 
 
+class Event:
+
+    def __init__(self, **kwargs):
+
+        for field, value in kwargs.items():
+            setattr(self, field, value)
+
+        self.attributes = kwargs.keys()
+
+        self.__is_done = False
+
+    def done(self):
+        self.__is_done = True
+
+    def is_done(self):
+        return self.__is_done
+
+    def match(self, other):
+        if type(other) != self.__class__:
+            return False
+
+        for attr in other.attributes:
+
+            other_value = getattr(other, attr)
+            this_value = getattr(self, attr)
+            if this_value != other_value:
+                return False
+
+        return True
+
+    #
+    # def __getattr__(self, attr):
+    #     if attr in self.attributes:
+    #         return self.attributes[attr]
+    #
+    #     raise AttributeError(f"{self.__class__.__name__} has no attribute '{attr}'")
+    #
+    # def __setattr__(self, key, value):
+    #     if 'attributes' not in self.__dict__:
+    #         super().__setattr__(key, value)
+    #
+    #     elif key in self.attributes:
+    #         self.attributes[key] = value
+    #
+    #     else:
+    #         self.__dict__[key] = value
+
+    def __repr__(self):
+        args = [(field, value) for (field, value) in self.__dict__.items() if field in self.attributes]
+
+        args_str = ' '.join([f'{field}={value}' for field, value in self.__dict__.items() if field in self.attributes])
+        return f"{self.__class__.__name__}({args_str})"
+
+
+class Sleep(Event):
+
+    def subtract_time(self, duration):
+        self.duration -= duration
+
+        if self.duration == 0.0:
+            self.done()
+
+        if self.duration < 0.0:
+            raise VerifyError(f"Slept {self.duration} too long")
+
+        return self.duration
+
+
+class TcpEvent(Event):
+    pass
+
+
+class OutgoingTcpSyn(TcpEvent):
+    pass
+
+
+class OutgoingTcpSynAck(TcpEvent):
+    pass
+
+
+class OutgoingTcpData(TcpEvent):
+    pass
+
+
+class OutgoingTcpFin(TcpEvent):
+    pass
+
+
+class IncomingTcpSyn(TcpEvent):
+    pass
+
+
+class IncomingTcpSynAck(TcpEvent):
+    pass
+
+
+class IncomingTcpData(TcpEvent):
+
+    def get_chunk(self, limit):
+        chunk = self.data[:limit]
+        self.data = self.data[limit:]
+
+        if len(self.data) == 0:
+            self.done()
+
+        return chunk
+
+
+class IncomingTcpFin(TcpEvent):
+    pass
+
+
 class EventQueue:
 
     def __init__(self):
-        self.queue = deque()
+        self.events = deque()
 
-    def append(self, event):
-        self.queue.append(event)
+    def fetch(self, actual_event):
 
-    def verify(self, verify_kind, **verify_attrs):
-        """ Verify if the given event kind and attrs is valid according to the current state
-        of the queue.
-        """
+        planned_event = self.head()
 
-        if not self.queue:
-            raise ValueError("There are no events in the eventqueue")
-
-        expected = self.queue[0]
-        expected_kind = type(expected)
-
-        if expected_kind != verify_kind:
-            raise ValueError(f"The expected kind {expected_kind.__name__} does not match "
-                             f"the verified kind {verify_kind.__name__}")
-
-        result = expected.verify(**verify_attrs)
-
-        # if the result is True the event is fully verified and can be discarded from the queue
-        # if not, then the event is not fully verified yet, and it should stay on the queue a
-        # little longer
-        if result:
-            self.queue.popleft()
-
-    def peek(self, kind):
-        """ Check if the current pending event matches the given event, and if so return it.
-        """
-
-        if not self.queue:
+        if not planned_event.match(actual_event):
             return None
 
-        event = self.queue[0]
+        return planned_event
 
-        if type(event) != kind:
-            return None
+    def expect(self, actual_event):
 
-        return event
+        planned_event = self.head()
 
-    def get_events(self, filter_set):
-        """ Return the events that are currently in the front end of the queue and match the filter set
+        if not planned_event:
+            raise VerifyError("No events planned.")
+
+        if not planned_event.match(actual_event):
+            print('?')
+            print('? ACTUAL:   ', actual_event)
+            print("?             != ")
+            print('? PLANNED:  ', planned_event)
+            print('?')
+
+            raise VerifyError("Event verification error")
+
+        # planned_event.done()
+
+        return planned_event
+
+    def add(self, event):
+        self.events.append(event)
+
+    def scan(self, filter_set):
+        """ Return the events that are currently in the front
+        of the queue and match the filter set
         """
 
-        for event in self.queue:
+        for event in self.events:
 
             if type(event) not in filter_set:
                 break
 
             yield event
 
+    def head(self):
+        while self.events:
+            event = self.events[0]
+            if event.is_done():
+                self.events.popleft()
+
+            else:
+                return event
+
+        return None
+
     def __len__(self):
-        return len(self.queue)
+        self.head()
+        return len(self.events)
 
     def dump(self):
         print('eventqueue = [')
-        for event in self.queue:
+        for event in self.events:
             print('        ', event, '. ')
         print('    ]')
 
 
-class ExpectEvent:
-
-    def __init__(self, **attrs):
-        self.__dict__ = attrs
-
-    def verify(self, **verify_attrs):
-
-        kind = self.__class__.__name__
-
-        for expected_attr, expected_value in self.__dict__.items():
-
-            if expected_attr not in verify_attrs:
-                raise ValueError(f"Missing attr {expected_attr} while validating {kind} event")
-
-            verify_value = verify_attrs[expected_attr]
-
-            if expected_value != verify_value:
-                raise ValueError(f"Value missmatch, expected '{expected_value}' instead of '{verify_value}' "
-                                 f"while validating {kind}")
-
-        return True
-
-
-class ExpectSleep(ExpectEvent):
-
-    def __init__(self, duration):
-        self.duration = duration
-
-    def verify(self, duration=None):
-        self.duration -= duration
-
-        if self.duration < 0:
-            raise ValueError(f"Slept for too long ({-self.duration:.1f}s too long)")
-
-        elif self.duration == 0:
-            # done sleeping
-            return True
-
-        else:
-            # not yet done sleeping
-            return False
-
-
-class ExpectTcpSyn(ExpectEvent):
-    pass
-
-
-class ExpectTcpSynAck(ExpectEvent):
-    pass
-
-
-class ExpectTcpOutput(ExpectEvent):
-    pass
-
-
-class ExpectTcpRst(ExpectEvent):
-    pass
-
-
-class DoEvent:
-
-    def __init__(self, **attrs):
-        self.__dict__ = attrs
-        # self.expected_attrs = attrs
-
-    def verify(self, **verify_attrs):
-
-        kind = self.__class__.__name__
-
-        for expected_attr, expected_value in self.__dict__.items():
-
-            if expected_attr not in verify_attrs:
-                raise ValueError(f"Missing attr {expected_attr} while validating {kind} event")
-
-            verify_value = verify_attrs[expected_attr]
-
-            if expected_value != verify_value:
-                raise ValueError(f"Value missmatch, expected '{expected_value}' instead of '{verify_value}' "
-                                 f"while validating {kind}")
-
-        return True
-
-
-class DoTcpSyn(DoEvent):
-    pass
-
-
-class DoTcpSynAck(DoEvent):
-    pass
-
-
-class DoTcpInput(DoEvent):
-    pass
-
-
-class DoTcpRst(DoEvent):
+class VerifyError(AssertionError):
     pass

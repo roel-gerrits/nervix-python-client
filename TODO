@@ -7,18 +7,12 @@ v1.0
 
 - add heaps of comments to channel.py and core.py
 
-- evaluate amount of logging, add more logging
-
-- implement nxtcp protocol
-    and add tests
-
-- directory with examples?
+- add more examples and add some documentation to them, also show how to run with correct PYTHONPATH
 
 - write README
 
 - docs
 
-- increase cooldown timer after multiple attempts
 
 
 DONE:

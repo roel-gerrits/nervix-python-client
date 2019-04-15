@@ -16,6 +16,6 @@ if __name__ == '__main__':
     loop, channel = nervix.create_channel("nxtcp://localhost:9999")
 
     sess = channel.session('demo', standby=True)
-    sess.set_call_handler(on_call)
+    sess.add_call_handler(on_call)
 
     loop.run_forever()

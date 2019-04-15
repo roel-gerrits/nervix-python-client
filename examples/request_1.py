@@ -14,8 +14,18 @@ def response(message):
 if __name__ == '__main__':
     loop, channel = nervix.create_channel("nxtcp://localhost:9999")
 
-    req = channel.request('demo', 'hello world')
-    req.set_handler(response)
-    req.send()
+    timer = loop.timer()
+
+
+    def trigger():
+        req = channel.request('demo', 'hello world')
+        print("trigger")
+        # req.set_handler(response)
+        req.send()
+        timer.set(.01)
+
+
+    timer.set_handler(trigger)
+    timer.set(.2)
 
     loop.run_forever()

@@ -3,15 +3,23 @@ from nervix.protocols import PROTOCOL_MAP
 from nervix.channel import Channel
 
 
-def create_channel(uri):
-    loop = Mainloop()
+def create_channel(uri, loop=None):
+    """ Creates Channel instance based on the given uri.
+    If no mainloop is given a new Mainloop will be created.
+    Returns a (mainloop, channel) tuple.
+    """
+
+    if not loop:
+        loop = Mainloop()
+
     connection = create_connection(loop, uri)
     chan = Channel(connection)
     return loop, chan
 
 
 def create_connection(loop, uri):
-    """
+    """ Create a connection instance based on the given uri.
+    Raises ValueError if the given uri was not valid.
     """
 
     proto_pos = uri.find('://')

@@ -2,6 +2,11 @@ from .base import BaseSerializer
 
 
 class StringSerializer(BaseSerializer):
+    """ Basic serializer.
+
+    Encodes objects into bytes.
+    Decodes bytes into UTF8 strings.
+    """
 
     def encode(self, obj):
 

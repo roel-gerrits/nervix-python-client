@@ -1,4 +1,6 @@
 class BaseConnection:
+    """ Interface for all connection subclasses.
+    """
 
     def set_ready_handler(self, handler):
         raise NotImplementedError()
@@ -11,6 +13,10 @@ class BaseConnection:
 
 
 def host_port_parser(address_str):
+    """ Function to parse an address string and return a (host, port) tuple.
+    Raises ValueError if the given string is invalid.
+    """
+
     host_pos = address_str.find(':')
 
     if host_pos == -1:

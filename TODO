@@ -5,16 +5,28 @@ v1.0
 
 - add licence (LGPL?)
 
-- add heaps of comments to channel.py and core.py
-
 - add more examples and add some documentation to them, also show how to run with correct PYTHONPATH
 
 - write README
 
 - docs
+    - API DOCS
+    - pydoc
+    - sphinx
+    - epydoc
+    - readthedocs
+    - github /docs ?
+
+
+
+- option to handle SIGINT/SIGTERM
+    - add channel.close() or conn.close() method that sends QUIT to server?
+    - maybe have create_channel function return a run() func instead of mainloop...?
 
 
 
 DONE:
 
 - create_channel('nxtcp://localhost:9999') function that creates a connection and channel object in one line
+
+- add heaps of comments to channel.py and core.py

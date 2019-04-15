@@ -1,9 +1,8 @@
 import unittest
 from unittest.mock import Mock
 
-from nervix.channel import Channel
-from nervix.core import Message, Post, Interest, Call, MessageStatus, InterestStatus, HandlerList
-from nervix import core
+from nervix.channel import Channel, Message, Post, Interest, Call, MessageStatus, InterestStatus, HandlerList
+from nervix import channel
 from nervix import verbs
 
 from tests.util.mockedconnection import MockedConnection
@@ -85,6 +84,45 @@ class Test(unittest.TestCase):
         conn.mock_connection_ready(True)
 
         conn.assert_upstream_verb(None)
+
+    def test_subscribe_message_1(self):
+        """ Test that the handler is called when a message is received for a subscription.
+        """
+
+        conn = MockedConnection()
+        chan = Channel(conn)
+
+        conn.mock_connection_ready(True)
+
+        handler = unittest.mock.Mock()
+        sub = chan.subscribe('name', 'topic')
+        sub.add_handler(handler)
+
+        conn.mock_downstream_verb(verbs.MessageVerb(
+            messageref=1,
+            status=verbs.MessageVerb.STATUS_OK,
+            payload=b'payload1',
+        ))
+
+        self.__verify_handler_call(
+            handler,
+            Message,
+            status=MessageStatus.OK,
+            payload='payload1',
+        )
+
+        conn.mock_downstream_verb(verbs.MessageVerb(
+            messageref=1,
+            status=verbs.MessageVerb.STATUS_OK,
+            payload=b'payload2',
+        ))
+
+        self.__verify_handler_call(
+            handler,
+            Message,
+            status=MessageStatus.OK,
+            payload='payload2',
+        )
 
     def test_login_logout_1(self):
         """ Test if the login and logout verbs are pushed when the sesison is created after the
@@ -211,7 +249,7 @@ class Test(unittest.TestCase):
         conn.mock_connection_ready(True)
 
         req = chan.request('name', 'payload')
-        req.set_handler(Mock())
+        req.add_handler(Mock())
         req.send()
 
         conn.assert_upstream_verb(verbs.RequestVerb(
@@ -532,7 +570,7 @@ class Test(unittest.TestCase):
 
         req = chan.request('name', 'payload')
         handler = Mock()
-        req.set_handler(handler, MessageStatus.ANY)
+        req.add_handler(handler, MessageStatus.ANY)
         reqi = req.send()
 
         conn.mock_downstream_verb(verbs.MessageVerb(
@@ -560,7 +598,7 @@ class Test(unittest.TestCase):
 
         req = chan.request('name', 'payload')
         handler = Mock()
-        req.set_handler(handler, MessageStatus.ANY)
+        req.add_handler(handler, MessageStatus.ANY)
         reqi = req.send()
 
         conn.mock_downstream_verb(verbs.MessageVerb(
@@ -588,7 +626,7 @@ class Test(unittest.TestCase):
 
         req = chan.request('name', 'payload')
         handler = Mock()
-        req.set_handler(handler, MessageStatus.ANY)
+        req.add_handler(handler, MessageStatus.ANY)
         reqi = req.send()
 
         conn.mock_downstream_verb(verbs.MessageVerb(
@@ -616,7 +654,7 @@ class Test(unittest.TestCase):
 
         session = chan.session('name')
         handler = Mock()
-        session.set_interest_handler(handler)
+        session.add_interest_handler(handler)
 
         conn.mock_downstream_verb(verbs.InterestVerb(
             postref=1,
@@ -645,7 +683,7 @@ class Test(unittest.TestCase):
 
         session = chan.session('name')
         handler = Mock()
-        session.set_interest_handler(handler)
+        session.add_interest_handler(handler)
 
         conn.mock_downstream_verb(verbs.InterestVerb(
             postref=1,
@@ -674,7 +712,7 @@ class Test(unittest.TestCase):
 
         session = chan.session('name')
         handler = Mock()
-        session.set_interest_handler(handler)
+        session.add_interest_handler(handler)
 
         conn.mock_downstream_verb(verbs.InterestVerb(
             postref=1,
@@ -712,7 +750,7 @@ class Test(unittest.TestCase):
 
         session = chan.session('name')
         handler = Mock()
-        session.set_call_handler(handler)
+        session.add_call_handler(handler)
 
         conn.mock_downstream_verb(verbs.CallVerb(
             unidirectional=True,
@@ -741,7 +779,7 @@ class Test(unittest.TestCase):
 
         session = chan.session('name')
         handler = Mock()
-        session.set_call_handler(handler)
+        session.add_call_handler(handler)
 
         conn.mock_downstream_verb(verbs.CallVerb(
             unidirectional=False,
@@ -775,7 +813,7 @@ class Test(unittest.TestCase):
 
         interest = Interest(chan.core, verb, None)
 
-        with self.assertLogs(core.logger, level='WARNING'):
+        with self.assertLogs(channel.logger, level='WARNING'):
             interest.post('payload')
 
     def test_call_post_warning(self):
@@ -794,14 +832,14 @@ class Test(unittest.TestCase):
 
         call = Call(chan.core, verb, None)
 
-        with self.assertLogs(core.logger, level='WARNING'):
+        with self.assertLogs(channel.logger, level='WARNING'):
             call.post('payload')
 
     def test_session_verb_logging_1(self):
         conn = MockedConnection()
         chan = Channel(conn)
 
-        with self.assertLogs(core.logger, level='INFO'):
+        with self.assertLogs(channel.logger, level='INFO'):
             conn.mock_downstream_verb(verbs.SessionVerb(
                 name=b'name',
                 state=verbs.SessionVerb.STATE_STANDBY,
@@ -811,7 +849,7 @@ class Test(unittest.TestCase):
         conn = MockedConnection()
         chan = Channel(conn)
 
-        with self.assertLogs(core.logger, level='INFO'):
+        with self.assertLogs(channel.logger, level='INFO'):
             conn.mock_downstream_verb(verbs.SessionVerb(
                 name=b'name',
                 state=verbs.SessionVerb.STATE_ACTIVE,
@@ -821,7 +859,7 @@ class Test(unittest.TestCase):
         conn = MockedConnection()
         chan = Channel(conn)
 
-        with self.assertLogs(core.logger, level='INFO'):
+        with self.assertLogs(channel.logger, level='INFO'):
             conn.mock_downstream_verb(verbs.SessionVerb(
                 name=b'name',
                 state=verbs.SessionVerb.STATE_ENDED,

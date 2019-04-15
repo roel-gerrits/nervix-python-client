@@ -233,18 +233,6 @@ class QuitPacket(BasePacket):
         self.set_type(PACKET_QUIT)
 
 
-class SyncReqPacket(BasePacket):
-    """
-    -
-    """
-
-    def __init__(self):
-        BasePacket.__init__(self)
-
-        # set type
-        self.set_type(PACKET_SYNC_REQ)
-
-
 def encode_name(name):
     # convert to bytes if needed
     if isinstance(name, str):

@@ -363,12 +363,26 @@ class Subscription:
 
     Example:
 
-    # to subscribe
-    sub = channel.subscribe('name', 'topic')
-    sub.add_handler(function_to_be_called_on_incoming_messages)
+    .. code-block:: py
 
-    # to unsubscribe
-    sub.cancel()
+        # to subscribe
+        sub = channel.subscribe('name', 'topic')
+        sub.add_handler(function_to_be_called_on_incoming_messages)
+
+        # to unsubscribe
+        sub.cancel()
+
+
+
+    Example::
+
+        # to subscribe
+        sub = channel.subscribe('name', 'topic')
+        sub.add_handler(function_to_be_called_on_incoming_messages)
+
+        # to unsubscribe
+        sub.cancel()
+
 
     """
 
